@@ -15,7 +15,6 @@ import datetime
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?uraaka-joshi\.com"
 USER_PATTERN = rf"{BASE_PATTERN}/user/([^/?#]+)"
-POST_PATTERN = rf"{BASE_PATTERN}/post/(\d+)"
 
 
 class UraakajoshiExtractor(Extractor):
@@ -31,10 +30,6 @@ class UraakajoshiExtractor(Extractor):
 	def __init__(self, match):
 		Extractor.__init__(self, match)
 		self.user = match[1] if match else None
-
-	def _init(self):
-		self.textonly = self.config("text-tweets", False)
-		self.videos = self.config("videos", True)
 		self._user_data = None
 
 	def items(self):
@@ -42,25 +37,20 @@ class UraakajoshiExtractor(Extractor):
 
 		for tweet_data in self.tweets():
 			tweet = self._transform_tweet(tweet_data)
-			files = self._extract_files(tweet_data, tweet)
+			files = self._extract_files(tweet_data)
 
-			if not files and not self.textonly:
+			if not files:
 				continue
 
 			yield Message.Directory, tweet
 
-			if files:
-				for num, file_data in enumerate(files, 1):
-					file_data.update(tweet)
-					file_data["num"] = num
-					yield Message.Url, file_data["url"], file_data
-			elif self.textonly:
-				tweet["num"] = 1
-				tweet["url"] = ""
-				tweet["extension"] = "txt"
-				yield Message.Url, "", tweet
+			for num, file_data in enumerate(files, 1):
+				url = file_data.pop("_url")  # Extract URL and remove from metadata
+				file_data.update(tweet)
+				file_data["num"] = num
+				yield Message.Url, url, file_data
 
-	def _extract_files(self, data, tweet):
+	def _extract_files(self, data):
 		"""Extract media files from tweet data"""
 		files = []
 
@@ -87,23 +77,23 @@ class UraakajoshiExtractor(Extractor):
 
 			for media in data["media"]:
 				# Prioritize video over photo - if video_file_name exists and is not empty, use video
-				if media.get("video_file_name") and self.videos:
+				if media.get("video_file_name"):
 					# Video file (prioritized over photo)
-					# Assume videos use same URL structure as photos
+					url = f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['video_file_name']}"
 					files.append(
 						{
-							"url": f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['video_file_name']}",
+							"_url": url,
 							"media_id": text.parse_int(media["id"]),
 							"extension": media["video_file_name"].split(".")[-1],
 							"type": "video",
 						}
 					)
 				elif media.get("photo_file_name"):
-					# Photo file (only if no video or videos disabled)
-					# Format: /media/{first_char}/{username}/{YYYYMM}/{YYYYMMDDHHMMSS}/{filename}
+					# Photo file (only if no video)
+					url = f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['photo_file_name']}"
 					files.append(
 						{
-							"url": f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['photo_file_name']}",
+							"_url": url,
 							"media_id": text.parse_int(media["id"]),
 							"width": media.get("photo_width", 0),
 							"height": media.get("photo_height", 0),
@@ -133,14 +123,6 @@ class UraakajoshiExtractor(Extractor):
 			"protected": user_data.get("protected", False),
 			"suspended": user_data.get("suspended", False),
 			"hashtags": user_data.get("hashtags", []),
-			"avatar_file_name": user_data.get("avatar_file_name", ""),
-			"banner_file_name": user_data.get("banner_file_name", ""),
-			"avatar_url": f"{self.root}/images/avatar/{user_data.get('avatar_file_name', '')}"
-			if user_data.get("avatar_file_name")
-			else "",
-			"banner_url": f"{self.root}/images/banner/{user_data.get('banner_file_name', '')}"
-			if user_data.get("banner_file_name")
-			else "",
 		}
 
 		# Transform tweet data
@@ -149,14 +131,12 @@ class UraakajoshiExtractor(Extractor):
 		return {
 			"tweet_id": tweet_id,
 			"id": tweet_id,  # For compatibility
-			"text": tweet_data["text"],
 			"content": text.unescape(tweet_data["text"]),
 			"date": text.parse_datetime(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
 			"created": tweet_data["created"],
 			"type": tweet_data.get("type", ""),
 			"access_ranking": tweet_data.get("access_ranking", ""),
 			"user": user,
-			"author": user,  # For compatibility with Twitter format
 		}
 
 	def tweets(self):
