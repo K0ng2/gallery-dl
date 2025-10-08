@@ -224,11 +224,17 @@ class UraakajoshiAPI:
 			current_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
 			one_char = username[0]
 
+			# Calculate page_name based on page_no
+			# page_name increases by 1000 every 1000 pages
+			# (page_no = 999, page_name = 000999), (page_no = 1000, page_name = 001999)
+			page_name_number = (page_no // 1000) * 1000 + 999
+			page_name = f"{page_name_number:06d}"
+
 			params = {
 				"json_item": "user",
 				"json_val": username,
 				"one_char": one_char,
-				"page_name": "000999",
+				"page_name": page_name,
 				"page_no": str(page_no),
 				"time": current_time,
 			}
