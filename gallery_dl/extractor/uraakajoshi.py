@@ -15,6 +15,7 @@ import datetime
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?uraaka-joshi\.com"
 USER_PATTERN = rf"{BASE_PATTERN}/user/([^/?#]+)"
+TAG_PATTERN = rf"{BASE_PATTERN}/hashtag/([^/?#]+)(?:/page/(\d+))?"
 
 
 class UraakajoshiExtractor(Extractor):
@@ -25,7 +26,7 @@ class UraakajoshiExtractor(Extractor):
 	filename_fmt = "{tweet_id}_{num}.{extension}"
 	archive_fmt = "{tweet_id}_{num}"
 	root = "https://www.uraaka-joshi.com"
-	request_interval = (0.5, 1.5)
+	# request_interval = (0.5, 1.5)
 
 	def __init__(self, match):
 		Extractor.__init__(self, match)
@@ -170,6 +171,41 @@ class UraakajoshiUserExtractor(UraakajoshiExtractor):
 		return {"user": self._user_data} if self._user_data else {}
 
 
+class UraakajoshiTagExtractor(UraakajoshiExtractor):
+	"""Extractor for Uraaka-joshi hashtag feeds"""
+
+	subcategory = "tag"
+	pattern = TAG_PATTERN + r"/?(?:$|\?|#)"
+	example = "https://www.uraaka-joshi.com/hashtag/HASHTAG/page/2000"
+
+	def __init__(self, match):
+		UraakajoshiExtractor.__init__(self, match)
+		self.tag = match[1] if match else None
+		self.page_start = text.parse_int(match[2]) if match and match[2] else 1
+
+	def items(self):
+		"""Generate users from hashtag feed"""
+		self.api = UraakajoshiAPI(self)
+
+		# Collect unique usernames from hashtag feed
+		seen_users = set()
+
+		for tweet_data in self.api.hashtag_timeline(self.tag, page_start=self.page_start):
+			user_data = tweet_data.get("user", {})
+			username = user_data.get("screen_name")
+
+			if username and username not in seen_users:
+				seen_users.add(username)
+
+				# Yield user URL for the user extractor to process
+				user_url = f"{self.root}/user/{username}"
+				yield Message.Queue, user_url, {"_extractor": UraakajoshiUserExtractor}
+
+	def metadata(self):
+		"""Return hashtag metadata"""
+		return {"tag": self.tag}
+
+
 class UraakajoshiAPI:
 	"""API handler for Uraaka-joshi"""
 
@@ -193,6 +229,56 @@ class UraakajoshiAPI:
 				"json_val": username,
 				"one_char": one_char,
 				"page_name": "000999",
+				"page_no": str(page_no),
+				"time": current_time,
+			}
+
+			url = f"{self.root}/json/timeline/"
+			response = self.extractor.request(url, params=params)
+
+			try:
+				data = response.json()
+			except Exception as exc:
+				self.extractor.log.debug("Failed to parse JSON response: %s", exc)
+				break
+
+			if not data.get("data"):
+				self.extractor.log.debug("No data found in response")
+				break
+
+			# Yield each tweet in the current page
+			for item in data["data"]:
+				yield item
+
+			# Check if there's a next page
+			current_page = data.get("current", 1)
+			next_page = data.get("next")
+
+			if not next_page or next_page <= current_page:
+				break
+
+			page_no = next_page
+
+	def hashtag_timeline(self, hashtag, max_pages=None, page_start=1):
+		"""Fetch hashtag timeline with pagination"""
+		page_no = page_start
+
+		while True:
+			if max_pages and page_no > (page_start + max_pages - 1):
+				break
+
+			current_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
+
+			# Calculate page_name based on page_no
+			# page_name increases by 1000 every 1000 pages
+			# (page_no = 999, page_name = 000999), (page_no = 1000, page_name = 001999)
+			page_name_number = (page_no // 1000) * 1000 + 999
+			page_name = f"{page_name_number:06d}"
+
+			params = {
+				"json_item": "hashtag",
+				"json_val": hashtag,
+				"page_name": page_name,
 				"page_no": str(page_no),
 				"time": current_time,
 			}
