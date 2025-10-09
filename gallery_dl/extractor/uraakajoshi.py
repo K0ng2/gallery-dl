@@ -30,88 +30,118 @@ class UraakajoshiExtractor(Extractor):
 
 	def __init__(self, match):
 		Extractor.__init__(self, match)
-		self.user = match[1] if match else None
-		self._user_data = None
+		self.username = match[1] if match else None
+		self._cached_user_data = None
 
 	def items(self):
 		self.api = UraakajoshiAPI(self)
 
 		for tweet_data in self.tweets():
-			tweet = self._transform_tweet(tweet_data)
-			files = self._extract_files(tweet_data)
+			transformed_tweet = self._transform_tweet(tweet_data)
+			media_files = self._extract_media_files(tweet_data)
 
-			if not files:
+			if not media_files:
 				continue
 
-			yield Message.Directory, tweet
+			yield Message.Directory, transformed_tweet
 
-			for num, file_data in enumerate(files, 1):
-				url = file_data.pop("_url")  # Extract URL and remove from metadata
-				file_data.update(tweet)
-				file_data["num"] = num
-				yield Message.Url, url, file_data
+			for file_number, file_metadata in enumerate(media_files, 1):
+				url = file_metadata.pop("_url")
+				file_metadata.update(transformed_tweet)
+				file_metadata["num"] = file_number
+				yield Message.Url, url, file_metadata
 
-	def _extract_files(self, data):
+	def _extract_media_files(self, data):
 		"""Extract media files from tweet data"""
+		if not self._has_media(data):
+			return []
+
+		username = data["user"]["screen_name"]
+		date_folder, timestamp_folder = self._extract_date_folders(data["tweet"]["created"])
+
+		return [
+			file_metadata
+			for media in data["media"]
+			for file_metadata in self._create_media_metadata(
+				media, username, date_folder, timestamp_folder
+			)
+		]
+
+	def _has_media(self, data):
+		"""Check if tweet data contains media"""
+		return "media" in data and data["media"]
+
+	def _extract_date_folders(self, created_timestamp):
+		"""Extract date folder names from timestamp"""
+		try:
+			parsed_datetime = datetime.datetime.strptime(
+				created_timestamp, "%Y-%m-%d %H:%M:%S"
+			)
+			return parsed_datetime.strftime("%Y%m"), parsed_datetime.strftime("%Y%m%d%H%M%S")
+		except ValueError:
+			return "unknown", "unknown"
+
+	def _create_media_metadata(self, media, username, date_folder, timestamp_folder):
+		"""Create metadata for a single media item"""
 		files = []
 
-		if "media" in data and data["media"]:
-			user_data = data["user"]
-			tweet_data = data["tweet"]
-
-			# Extract date components from tweet created timestamp
-			# Format: YYYY-MM-DD HH:MM:SS -> YYYYMM and YYYYMMDDHHMMSS
-			created = tweet_data["created"]
-			try:
-				# Parse date: "2023-07-13 06:03:38"
-				dt = datetime.datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
-				date_folder = dt.strftime("%Y%m")  # 202307
-				timestamp_folder = dt.strftime("%Y%m%d%H%M%S")  # 20230713060338
-			except ValueError:
-				# Fallback if date parsing fails
-				date_folder = "unknown"
-				timestamp_folder = "unknown"
-
-			# Get username and first character for URL path
-			username = user_data["screen_name"]
-			first_char = username[0]
-
-			for media in data["media"]:
-				# Prioritize video over photo - if video_file_name exists and is not empty, use video
-				if media.get("video_file_name"):
-					# Video file (prioritized over photo)
-					url = f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['video_file_name']}"
-					files.append(
-						{
-							"_url": url,
-							"media_id": text.parse_int(media["id"]),
-							"extension": media["video_file_name"].split(".")[-1],
-							"type": "video",
-						}
-					)
-				elif media.get("photo_file_name"):
-					# Photo file (only if no video)
-					url = f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{media['photo_file_name']}"
-					files.append(
-						{
-							"_url": url,
-							"media_id": text.parse_int(media["id"]),
-							"width": media.get("photo_width", 0),
-							"height": media.get("photo_height", 0),
-							"extension": media["photo_file_name"].split(".")[-1],
-							"type": "photo",
-						}
-					)
+		if media.get("video_file_name"):
+			files.append(
+				self._create_video_metadata(media, username, date_folder, timestamp_folder)
+			)
+		elif media.get("photo_file_name"):
+			files.append(
+				self._create_photo_metadata(media, username, date_folder, timestamp_folder)
+			)
 
 		return files
 
+	def _create_video_metadata(self, media, username, date_folder, timestamp_folder):
+		"""Create metadata for video file"""
+		url = self._build_media_url(
+			username, date_folder, timestamp_folder, media["video_file_name"]
+		)
+		return {
+			"_url": url,
+			"media_id": text.parse_int(media["id"]),
+			"extension": self._get_file_extension(media["video_file_name"]),
+			"type": "video",
+		}
+
+	def _create_photo_metadata(self, media, username, date_folder, timestamp_folder):
+		"""Create metadata for photo file"""
+		url = self._build_media_url(
+			username, date_folder, timestamp_folder, media["photo_file_name"]
+		)
+		return {
+			"_url": url,
+			"media_id": text.parse_int(media["id"]),
+			"width": media.get("photo_width", 0),
+			"height": media.get("photo_height", 0),
+			"extension": self._get_file_extension(media["photo_file_name"]),
+			"type": "photo",
+		}
+
+	def _build_media_url(self, username, date_folder, timestamp_folder, filename):
+		"""Build complete media URL"""
+		first_char = username[0]
+		return f"{self.root}/media/{first_char}/{username}/{date_folder}/{timestamp_folder}/{filename}"
+
+	def _get_file_extension(self, filename):
+		"""Extract file extension from filename"""
+		return filename.split(".")[-1] if "." in filename else ""
+
 	def _transform_tweet(self, data):
 		"""Transform API data into standardized tweet format"""
-		user_data = data["user"]
-		tweet_data = data["tweet"]
+		return {
+			**self._transform_tweet_data(data["tweet"]),
+			"user": self._transform_user_data(data["user"]),
+			"screen_name": data["screen_name"],
+		}
 
-		# Transform user data
-		user = {
+	def _transform_user_data(self, user_data):
+		"""Transform user data into standardized format"""
+		return {
 			"id": text.parse_int(user_data["id"]),
 			"screen_name": user_data["screen_name"],
 			"name": user_data["name"],
@@ -126,20 +156,72 @@ class UraakajoshiExtractor(Extractor):
 			"hashtags": user_data.get("hashtags", []),
 		}
 
-		# Transform tweet data
+	def _transform_tweet_data(self, tweet_data):
+		"""Transform tweet data into standardized format"""
 		tweet_id = text.parse_int(tweet_data["id"])
-
 		return {
 			"tweet_id": tweet_id,
-			"id": tweet_id,  # For compatibility
+			"id": tweet_id,
 			"content": text.unescape(tweet_data["text"]),
 			"date": text.parse_datetime(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
 			"created": tweet_data["created"],
 			"type": tweet_data.get("type", ""),
 			"access_ranking": tweet_data.get("access_ranking", ""),
-			"user": user,
-			"screen_name": data["screen_name"],
 		}
+
+	def _get_user_data_from_timeline(self):
+		"""Get user data from the first tweet in timeline"""
+		if not hasattr(self, "api"):
+			self.api = UraakajoshiAPI(self)
+
+		for tweet_data in self.api.user_timeline(self.username, max_pages=1):
+			return self._transform_tweet(tweet_data)["user"]
+		return None
+
+	def _get_first_tweet_data(self):
+		"""Get the first tweet data from timeline"""
+		if not hasattr(self, "api"):
+			self.api = UraakajoshiAPI(self)
+
+		for tweet_data in self.api.user_timeline(self.username, max_pages=1):
+			return tweet_data
+		return None
+
+	def _extract_unique_profile_media(self, screen_names, file_key, media_type):
+		"""Extract unique profile media files (avatars/backgrounds)"""
+		seen_files = set()
+		unique_items = []
+
+		for screen_name_data in screen_names:
+			filename = screen_name_data.get(file_key)
+			if filename and filename not in seen_files:
+				seen_files.add(filename)
+				unique_items.append((screen_name_data, filename))
+
+		return unique_items
+
+	def _create_profile_media_metadata(
+		self, username, filename, media_type, file_number, user_data
+	):
+		"""Create metadata for profile media files"""
+		extension = filename.split(".")[-1].lower() if "." in filename else "jpg"
+		base_filename = filename.rsplit(".", 1)[0] if "." in filename else filename
+
+		return {
+			"extension": extension,
+			"filename": base_filename,
+			"media_id": f"{media_type}_{username}",
+			"type": media_type,
+			"tweet_id": 0,
+			"num": file_number,
+			"screen_name": username,
+			"user": user_data,
+		}
+
+	def _build_profile_media_url(self, username, filename):
+		"""Build URL for profile media (avatar/background)"""
+		first_char = username[0]
+		return f"{self.root}/media/{first_char}/{username}/profile/{filename}"
 
 	def tweets(self):
 		"""Generate tweet data - to be overridden by subclasses"""
@@ -158,7 +240,7 @@ class UraakajoshiUserExtractor(Dispatch, UraakajoshiExtractor):
 	example = "https://www.uraaka-joshi.com/user/USERNAME"
 
 	def items(self):
-		base = f"{self.root}/user/{self.user}/"
+		base = f"{self.root}/user/{self.username}/"
 		return self._dispatch_extractors(
 			(
 				(UraakajoshiInfoExtractor, base + "info"),
@@ -179,17 +261,14 @@ class UraakajoshiTimelineExtractor(UraakajoshiExtractor):
 
 	def tweets(self):
 		"""Fetch tweets from user timeline"""
-		return self.api.user_timeline(self.user)
+		return self.api.user_timeline(self.username)
 
 	def metadata(self):
 		"""Return user metadata"""
-		if self._user_data is None:
-			# Get user data from first tweet if available
-			for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-				self._user_data = self._transform_tweet(tweet_data)["user"]
-				break
+		if self._cached_user_data is None:
+			self._cached_user_data = self._get_user_data_from_timeline()
 
-		return {"user": self._user_data} if self._user_data else {}
+		return {"user": self._cached_user_data} if self._cached_user_data else {}
 
 
 class UraakajoshiInfoExtractor(UraakajoshiExtractor):
@@ -200,27 +279,13 @@ class UraakajoshiInfoExtractor(UraakajoshiExtractor):
 	example = "https://www.uraaka-joshi.com/user/USERNAME/info"
 
 	def items(self):
-		self.api = UraakajoshiAPI(self)
-
-		# Get user data from first tweet if available
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
-
+		user_data = self._get_user_data_from_timeline()
 		if user_data:
 			yield Message.Directory, {"user": user_data}
 
 	def metadata(self):
 		"""Return user metadata"""
-		if not hasattr(self, "api"):
-			self.api = UraakajoshiAPI(self)
-
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
-
+		user_data = self._get_user_data_from_timeline()
 		return {"user": user_data} if user_data else {}
 
 
@@ -270,86 +335,40 @@ class UraakajoshiAvatarExtractor(UraakajoshiExtractor):
 
 	def items(self):
 		"""Fetch user avatars"""
-		if not self.user:
+		if not self.username:
 			return
 
-		self.api = UraakajoshiAPI(self)
-
-		# Get user data from first tweet if available
-		tweet_data = None
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
+		tweet_data = self._get_first_tweet_data()
+		user_data = self._get_user_data_from_timeline()
 
 		if not user_data or not tweet_data:
 			return
 
 		yield Message.Directory, {"user": user_data}
 
-		# Process avatars from screen_name array
 		screen_names = tweet_data.get("screen_name", [])
 		if not screen_names:
 			return
 
-		# Remove duplicates based on avatar_file_name
-		seen_avatars = set()
-		unique_screen_names = []
-		for screen_name_data in screen_names:
-			avatar_filename = screen_name_data.get("avatar_file_name")
-			if avatar_filename and avatar_filename not in seen_avatars:
-				seen_avatars.add(avatar_filename)
-				unique_screen_names.append(screen_name_data)
+		unique_avatars = self._extract_unique_profile_media(
+			screen_names, "avatar_file_name", "avatar"
+		)
 
-		for num, screen_name_data in enumerate(unique_screen_names, 1):
-			avatar_filename = screen_name_data.get("avatar_file_name")
-			if not avatar_filename:
-				self.log.debug(
-					"Skipping avatar for %s: no avatar_file_name",
-					screen_name_data.get("screen_name", "unknown"),
-				)
-				continue
-
+		for file_number, (screen_name_data, avatar_filename) in enumerate(
+			unique_avatars, 1
+		):
 			username = screen_name_data["screen_name"]
-			first_char = username[0]
+			avatar_url = self._build_profile_media_url(username, avatar_filename)
 
-			# Construct avatar URL
-			avatar_url = (
-				f"{self.root}/media/{first_char}/{username}/profile/{avatar_filename}"
+			file_metadata = self._create_profile_media_metadata(
+				username, avatar_filename, "avatar", file_number, user_data
 			)
 
-			# Detect extension from filename
-			extension = (
-				avatar_filename.split(".")[-1].lower() if "." in avatar_filename else "jpg"
-			)
-
-			yield (
-				Message.Url,
-				avatar_url,
-				{
-					"extension": extension,
-					"filename": avatar_filename.rsplit(".", 1)[0]
-					if "." in avatar_filename
-					else avatar_filename,
-					"media_id": f"avatar_{username}",
-					"type": "avatar",
-					"tweet_id": 0,
-					"num": num,
-					"screen_name": username,
-					"user": user_data,
-				},
-			)
+			yield Message.Url, avatar_url, file_metadata
 
 	def metadata(self):
 		"""Return user metadata"""
-		if not hasattr(self, "api"):
-			self.api = UraakajoshiAPI(self)
-
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
-
+		user_data = self._get_user_data_from_timeline()
 		return {"user": user_data} if user_data else {}
 
 
@@ -364,86 +383,40 @@ class UraakajoshiBackgroundExtractor(UraakajoshiExtractor):
 
 	def items(self):
 		"""Fetch user background images"""
-		if not self.user:
+		if not self.username:
 			return
 
-		self.api = UraakajoshiAPI(self)
-
-		# Get user data from first tweet if available
-		tweet_data = None
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
+		tweet_data = self._get_first_tweet_data()
+		user_data = self._get_user_data_from_timeline()
 
 		if not user_data or not tweet_data:
 			return
 
 		yield Message.Directory, {"user": user_data}
 
-		# Process backgrounds from screen_name array
 		screen_names = tweet_data.get("screen_name", [])
 		if not screen_names:
 			return
 
-		# Remove duplicates based on banner_file_name
-		seen_banners = set()
-		unique_screen_names = []
-		for screen_name_data in screen_names:
-			banner_filename = screen_name_data.get("banner_file_name")
-			if banner_filename and banner_filename not in seen_banners:
-				seen_banners.add(banner_filename)
-				unique_screen_names.append(screen_name_data)
+		unique_backgrounds = self._extract_unique_profile_media(
+			screen_names, "banner_file_name", "background"
+		)
 
-		for num, screen_name_data in enumerate(unique_screen_names, 1):
-			banner_filename = screen_name_data.get("banner_file_name")
-			if not banner_filename:
-				self.log.debug(
-					"Skipping background for %s: no banner_file_name",
-					screen_name_data.get("screen_name", "unknown"),
-				)
-				continue
-
+		for file_number, (screen_name_data, banner_filename) in enumerate(
+			unique_backgrounds, 1
+		):
 			username = screen_name_data["screen_name"]
-			first_char = username[0]
+			background_url = self._build_profile_media_url(username, banner_filename)
 
-			# Construct background image URL
-			background_url = (
-				f"{self.root}/media/{first_char}/{username}/profile/{banner_filename}"
+			file_metadata = self._create_profile_media_metadata(
+				username, banner_filename, "background", file_number, user_data
 			)
 
-			# Detect extension from filename
-			extension = (
-				banner_filename.split(".")[-1].lower() if "." in banner_filename else "jpg"
-			)
-
-			yield (
-				Message.Url,
-				background_url,
-				{
-					"extension": extension,
-					"filename": banner_filename.rsplit(".", 1)[0]
-					if "." in banner_filename
-					else banner_filename,
-					"media_id": f"background_{username}",
-					"type": "background",
-					"tweet_id": 0,
-					"num": num,
-					"screen_name": username,
-					"user": user_data,
-				},
-			)
+			yield Message.Url, background_url, file_metadata
 
 	def metadata(self):
 		"""Return user metadata"""
-		if not hasattr(self, "api"):
-			self.api = UraakajoshiAPI(self)
-
-		user_data = None
-		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
-			user_data = self._transform_tweet(tweet_data)["user"]
-			break
-
+		user_data = self._get_user_data_from_timeline()
 		return {"user": user_data} if user_data else {}
 
 
@@ -456,102 +429,73 @@ class UraakajoshiAPI:
 
 	def user_timeline(self, username, max_pages=None):
 		"""Fetch user timeline with pagination"""
-		page_no = 1
+		params = {
+			"json_item": "user",
+			"json_val": username,
+			"one_char": username[0],
+		}
+		return self._fetch_timeline(params, max_pages, page_start=1)
 
-		while True:
-			if max_pages and page_no > max_pages:
-				break
+	def _calculate_page_name(self, page_no):
+		"""Calculate page_name based on page number"""
+		page_name_number = (page_no // 1000) * 1000 + 999
+		return f"{page_name_number:06d}"
 
-			current_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
-			one_char = username[0]
+	def _build_request_params(self, base_params, page_no):
+		"""Build complete request parameters"""
+		current_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
 
-			# Calculate page_name based on page_no
-			# page_name increases by 1000 every 1000 pages
-			# (page_no = 999, page_name = 000999), (page_no = 1000, page_name = 001999)
-			page_name_number = (page_no // 1000) * 1000 + 999
-			page_name = f"{page_name_number:06d}"
+		return {
+			**base_params,
+			"page_name": self._calculate_page_name(page_no),
+			"page_no": str(page_no),
+			"time": current_time,
+		}
 
-			params = {
-				"json_item": "user",
-				"json_val": username,
-				"one_char": one_char,
-				"page_name": page_name,
-				"page_no": str(page_no),
-				"time": current_time,
-			}
+	def _make_timeline_request(self, params):
+		"""Make timeline API request and return parsed data"""
+		url = f"{self.root}/json/timeline/"
+		response = self.extractor.request(url, params=params)
 
-			url = f"{self.root}/json/timeline/"
-			response = self.extractor.request(url, params=params)
+		try:
+			return response.json()
+		except Exception as exc:
+			self.extractor.log.debug("Failed to parse JSON response: %s", exc)
+			return None
 
-			try:
-				data = response.json()
-			except Exception as exc:
-				self.extractor.log.debug("Failed to parse JSON response: %s", exc)
-				break
-
-			if not data.get("data"):
-				self.extractor.log.debug("No data found in response")
-				break
-
-			# Yield each tweet in the current page
-			for item in data["data"]:
-				yield item
-
-			# Check if there's a next page
-			current_page = data.get("current", 1)
-			next_page = data.get("next")
-
-			if not next_page or next_page <= current_page:
-				break
-
-			page_no = next_page
-
-	def hashtag_timeline(self, hashtag, max_pages=None, page_start=1):
-		"""Fetch hashtag timeline with pagination"""
+	def _fetch_timeline(self, base_params, max_pages=None, page_start=1):
+		"""Generic method to fetch timeline with pagination"""
 		page_no = page_start
 
 		while True:
 			if max_pages and page_no > (page_start + max_pages - 1):
 				break
 
-			current_time = datetime.datetime.now().strftime("%Y%m%d%H%M")
+			params = self._build_request_params(base_params, page_no)
+			data = self._make_timeline_request(params)
 
-			# Calculate page_name based on page_no
-			# page_name increases by 1000 every 1000 pages
-			# (page_no = 999, page_name = 000999), (page_no = 1000, page_name = 001999)
-			page_name_number = (page_no // 1000) * 1000 + 999
-			page_name = f"{page_name_number:06d}"
-
-			params = {
-				"json_item": "hashtag",
-				"json_val": hashtag,
-				"page_name": page_name,
-				"page_no": str(page_no),
-				"time": current_time,
-			}
-
-			url = f"{self.root}/json/timeline/"
-			response = self.extractor.request(url, params=params)
-
-			try:
-				data = response.json()
-			except Exception as exc:
-				self.extractor.log.debug("Failed to parse JSON response: %s", exc)
-				break
-
-			if not data.get("data"):
+			if not data or not data.get("data"):
 				self.extractor.log.debug("No data found in response")
 				break
 
-			# Yield each tweet in the current page
 			for item in data["data"]:
 				yield item
 
-			# Check if there's a next page
-			current_page = data.get("current", 1)
-			next_page = data.get("next")
-
-			if not next_page or next_page <= current_page:
+			if not self._has_next_page(data):
 				break
 
-			page_no = next_page
+			page_no = data.get("next", page_no + 1)
+
+	def _has_next_page(self, data):
+		"""Check if there's a next page available"""
+		current_page = data.get("current", 1)
+		next_page = data.get("next")
+		return next_page and next_page > current_page
+
+	def hashtag_timeline(self, hashtag, max_pages=None, page_start=1):
+		"""Fetch hashtag timeline with pagination"""
+		params = {
+			"json_item": "hashtag",
+			"json_val": hashtag,
+		}
+		return self._fetch_timeline(params, max_pages, page_start)
