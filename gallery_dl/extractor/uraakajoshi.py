@@ -8,7 +8,7 @@
 
 """Extractors for https://www.uraaka-joshi.com/"""
 
-from .common import Extractor, Message
+from .common import Extractor, Message, Dispatch
 from .. import text
 import datetime
 
@@ -150,12 +150,32 @@ class UraakajoshiExtractor(Extractor):
 		return {}
 
 
-class UraakajoshiUserExtractor(UraakajoshiExtractor):
-	"""Extractor for a Uraaka-joshi user timeline"""
+class UraakajoshiUserExtractor(Dispatch, UraakajoshiExtractor):
+	"""Extractor for Uraaka-joshi user profiles"""
 
 	subcategory = "user"
 	pattern = USER_PATTERN + r"/?(?:$|\?|#)"
 	example = "https://www.uraaka-joshi.com/user/USERNAME"
+
+	def items(self):
+		base = f"{self.root}/user/{self.user}/"
+		return self._dispatch_extractors(
+			(
+				(UraakajoshiInfoExtractor, base + "info"),
+				(UraakajoshiTimelineExtractor, base + "timeline"),
+				(UraakajoshiAvatarExtractor, base + "avatar"),
+				(UraakajoshiBackgroundExtractor, base + "background"),
+			),
+			("timeline",),
+		)
+
+
+class UraakajoshiTimelineExtractor(UraakajoshiExtractor):
+	"""Extractor for a Uraaka-joshi user timeline"""
+
+	subcategory = "timeline"
+	pattern = USER_PATTERN + r"/timeline/?(?:$|\?|#)"
+	example = "https://www.uraaka-joshi.com/user/USERNAME/timeline"
 
 	def tweets(self):
 		"""Fetch tweets from user timeline"""
@@ -170,6 +190,38 @@ class UraakajoshiUserExtractor(UraakajoshiExtractor):
 				break
 
 		return {"user": self._user_data} if self._user_data else {}
+
+
+class UraakajoshiInfoExtractor(UraakajoshiExtractor):
+	"""Extractor for Uraaka-joshi user profile information"""
+
+	subcategory = "info"
+	pattern = USER_PATTERN + r"/info/?(?:$|\?|#)"
+	example = "https://www.uraaka-joshi.com/user/USERNAME/info"
+
+	def items(self):
+		self.api = UraakajoshiAPI(self)
+
+		# Get user data from first tweet if available
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		if user_data:
+			yield Message.Directory, {"user": user_data}
+
+	def metadata(self):
+		"""Return user metadata"""
+		if not hasattr(self, "api"):
+			self.api = UraakajoshiAPI(self)
+
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		return {"user": user_data} if user_data else {}
 
 
 class UraakajoshiTagExtractor(UraakajoshiExtractor):
@@ -205,6 +257,194 @@ class UraakajoshiTagExtractor(UraakajoshiExtractor):
 	def metadata(self):
 		"""Return hashtag metadata"""
 		return {"tag": self.tag}
+
+
+class UraakajoshiAvatarExtractor(UraakajoshiExtractor):
+	"""Extractor for Uraaka-joshi user avatars"""
+
+	subcategory = "avatar"
+	pattern = USER_PATTERN + r"/avatar"
+	example = "https://www.uraaka-joshi.com/user/USERNAME/avatar"
+	filename_fmt = "avatar_{filename}.{extension}"
+	archive_fmt = "avatar_{filename}"
+
+	def items(self):
+		"""Fetch user avatars"""
+		if not self.user:
+			return
+
+		self.api = UraakajoshiAPI(self)
+
+		# Get user data from first tweet if available
+		tweet_data = None
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		if not user_data or not tweet_data:
+			return
+
+		yield Message.Directory, {"user": user_data}
+
+		# Process avatars from screen_name array
+		screen_names = tweet_data.get("screen_name", [])
+		if not screen_names:
+			return
+
+		# Remove duplicates based on avatar_file_name
+		seen_avatars = set()
+		unique_screen_names = []
+		for screen_name_data in screen_names:
+			avatar_filename = screen_name_data.get("avatar_file_name")
+			if avatar_filename and avatar_filename not in seen_avatars:
+				seen_avatars.add(avatar_filename)
+				unique_screen_names.append(screen_name_data)
+
+		for num, screen_name_data in enumerate(unique_screen_names, 1):
+			avatar_filename = screen_name_data.get("avatar_file_name")
+			if not avatar_filename:
+				self.log.debug(
+					"Skipping avatar for %s: no avatar_file_name",
+					screen_name_data.get("screen_name", "unknown"),
+				)
+				continue
+
+			username = screen_name_data["screen_name"]
+			first_char = username[0]
+
+			# Construct avatar URL
+			avatar_url = (
+				f"{self.root}/media/{first_char}/{username}/profile/{avatar_filename}"
+			)
+
+			# Detect extension from filename
+			extension = (
+				avatar_filename.split(".")[-1].lower() if "." in avatar_filename else "jpg"
+			)
+
+			yield (
+				Message.Url,
+				avatar_url,
+				{
+					"extension": extension,
+					"filename": avatar_filename.rsplit(".", 1)[0]
+					if "." in avatar_filename
+					else avatar_filename,
+					"media_id": f"avatar_{username}",
+					"type": "avatar",
+					"tweet_id": 0,
+					"num": num,
+					"screen_name": username,
+					"user": user_data,
+				},
+			)
+
+	def metadata(self):
+		"""Return user metadata"""
+		if not hasattr(self, "api"):
+			self.api = UraakajoshiAPI(self)
+
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		return {"user": user_data} if user_data else {}
+
+
+class UraakajoshiBackgroundExtractor(UraakajoshiExtractor):
+	"""Extractor for Uraaka-joshi user background images"""
+
+	subcategory = "background"
+	pattern = USER_PATTERN + r"/background"
+	example = "https://www.uraaka-joshi.com/user/USERNAME/background"
+	filename_fmt = "background_{filename}.{extension}"
+	archive_fmt = "background_{filename}"
+
+	def items(self):
+		"""Fetch user background images"""
+		if not self.user:
+			return
+
+		self.api = UraakajoshiAPI(self)
+
+		# Get user data from first tweet if available
+		tweet_data = None
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		if not user_data or not tweet_data:
+			return
+
+		yield Message.Directory, {"user": user_data}
+
+		# Process backgrounds from screen_name array
+		screen_names = tweet_data.get("screen_name", [])
+		if not screen_names:
+			return
+
+		# Remove duplicates based on banner_file_name
+		seen_banners = set()
+		unique_screen_names = []
+		for screen_name_data in screen_names:
+			banner_filename = screen_name_data.get("banner_file_name")
+			if banner_filename and banner_filename not in seen_banners:
+				seen_banners.add(banner_filename)
+				unique_screen_names.append(screen_name_data)
+
+		for num, screen_name_data in enumerate(unique_screen_names, 1):
+			banner_filename = screen_name_data.get("banner_file_name")
+			if not banner_filename:
+				self.log.debug(
+					"Skipping background for %s: no banner_file_name",
+					screen_name_data.get("screen_name", "unknown"),
+				)
+				continue
+
+			username = screen_name_data["screen_name"]
+			first_char = username[0]
+
+			# Construct background image URL
+			background_url = (
+				f"{self.root}/media/{first_char}/{username}/profile/{banner_filename}"
+			)
+
+			# Detect extension from filename
+			extension = (
+				banner_filename.split(".")[-1].lower() if "." in banner_filename else "jpg"
+			)
+
+			yield (
+				Message.Url,
+				background_url,
+				{
+					"extension": extension,
+					"filename": banner_filename.rsplit(".", 1)[0]
+					if "." in banner_filename
+					else banner_filename,
+					"media_id": f"background_{username}",
+					"type": "background",
+					"tweet_id": 0,
+					"num": num,
+					"screen_name": username,
+					"user": user_data,
+				},
+			)
+
+	def metadata(self):
+		"""Return user metadata"""
+		if not hasattr(self, "api"):
+			self.api = UraakajoshiAPI(self)
+
+		user_data = None
+		for tweet_data in self.api.user_timeline(self.user, max_pages=1):
+			user_data = self._transform_tweet(tweet_data)["user"]
+			break
+
+		return {"user": user_data} if user_data else {}
 
 
 class UraakajoshiAPI:
