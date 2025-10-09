@@ -138,6 +138,7 @@ class UraakajoshiExtractor(Extractor):
 			"type": tweet_data.get("type", ""),
 			"access_ranking": tweet_data.get("access_ranking", ""),
 			"user": user,
+			"screen_name": data["screen_name"],
 		}
 
 	def tweets(self):
