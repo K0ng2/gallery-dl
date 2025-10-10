@@ -9,7 +9,7 @@
 """Extractors for https://www.uraaka-joshi.com/"""
 
 from .common import Extractor, Message, Dispatch
-from .. import text
+from .. import text, util
 import datetime
 
 
@@ -32,6 +32,7 @@ class UraakajoshiExtractor(Extractor):
 		Extractor.__init__(self, match)
 		self.username = match[1] if match else None
 		self._cached_user_data = None
+		self._cursor = None
 
 	def items(self):
 		self.api = UraakajoshiAPI(self)
@@ -231,6 +232,30 @@ class UraakajoshiExtractor(Extractor):
 		"""Return metadata for the extraction"""
 		return {}
 
+	def finalize(self):
+		"""Log cursor information for continuing downloads"""
+		if self._cursor:
+			self.log.info(
+				"Use '-o cursor=%s' to continue downloading from the current position",
+				self._cursor,
+			)
+
+	def _init_cursor(self):
+		"""Initialize cursor from config"""
+		cursor = self.config("cursor", True)
+		if cursor is True:
+			return None
+		elif not cursor:
+			self._update_cursor = util.identity
+		return cursor
+
+	def _update_cursor(self, cursor):
+		"""Update cursor and log debug information"""
+		if cursor:
+			self.log.debug("Cursor: %s", cursor)
+		self._cursor = cursor
+		return cursor
+
 
 class UraakajoshiUserExtractor(Dispatch, UraakajoshiExtractor):
 	"""Extractor for Uraaka-joshi user profiles"""
@@ -308,7 +333,9 @@ class UraakajoshiTagExtractor(UraakajoshiExtractor):
 		# Collect unique usernames from hashtag feed
 		seen_users = set()
 
-		for tweet_data in self.api.hashtag_timeline(self.tag, page_start=self.page_start):
+		for tweet_data in self.api.hashtag_timeline(
+			self.tag, page_start=self.page_start, cursor=self._init_cursor()
+		):
 			user_data = tweet_data.get("user", {})
 			username = user_data.get("screen_name")
 
@@ -476,15 +503,18 @@ class UraakajoshiAPI:
 
 			if not data or not data.get("data"):
 				self.extractor.log.debug("No data found in response")
+				self.extractor._update_cursor(None)
 				break
 
 			for item in data["data"]:
 				yield item
 
 			if not self._has_next_page(data):
+				self.extractor._update_cursor(None)
 				break
 
 			page_no = data.get("next", page_no + 1)
+			self.extractor._update_cursor(page_no)
 
 	def _has_next_page(self, data):
 		"""Check if there's a next page available"""
@@ -492,10 +522,12 @@ class UraakajoshiAPI:
 		next_page = data.get("next")
 		return next_page and next_page > current_page
 
-	def hashtag_timeline(self, hashtag, max_pages=None, page_start=1):
+	def hashtag_timeline(self, hashtag, max_pages=None, page_start=1, cursor=None):
 		"""Fetch hashtag timeline with pagination"""
 		params = {
 			"json_item": "hashtag",
 			"json_val": hashtag,
 		}
+		if cursor is not None:
+			page_start = cursor
 		return self._fetch_timeline(params, max_pages, page_start)
