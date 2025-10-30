@@ -164,7 +164,7 @@ class UraakajoshiExtractor(Extractor):
 			"tweet_id": tweet_id,
 			"id": tweet_id,
 			"content": text.unescape(tweet_data["text"]),
-			"date": text.parse_datetime(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
+			"date": self.parse_timestamp(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
 			"created": tweet_data["created"],
 			"type": tweet_data.get("type", ""),
 			"access_ranking": tweet_data.get("access_ranking", ""),

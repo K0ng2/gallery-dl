@@ -207,6 +207,7 @@ modules = [
 	"urlgalleries",
 	"unsplash",
 	"uploadir",
+	"uraakajoshi",
 	"urlshortener",
 	"vanillarock",
 	"vichan",
