@@ -265,6 +265,9 @@ SUBCATEGORY_MAP = {
         "discord-server": "",
         "posts"         : "",
     },
+    "cyberfile": {
+        "shared": "Shares",
+    },
     "Danbooru": {
         "favgroup": "Favorite Groups",
         "random"  : "Random Posts",
@@ -526,6 +529,7 @@ AUTH_MAP = {
     "sankaku"        : "Supported",
     "scrolller"      : "Supported",
     "seiga"          : "Supported",
+    "simpcity"       : "Supported",
     "smugmug"        : _OAUTH,
     "subscribestar"  : "Supported",
     "tapas"          : "Supported",

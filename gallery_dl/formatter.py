@@ -13,9 +13,8 @@ import sys
 import time
 import string
 import _string
-import datetime
 import operator
-from . import text, util
+from . import text, util, dt
 
 NONE = util.NONE
 
@@ -40,7 +39,15 @@ def parse(format_string, default=NONE, fmt=format):
     else:
         cls = StringFormatter
 
-    formatter = _CACHE[key] = cls(format_string, default, fmt)
+    try:
+        formatter = _CACHE[key] = cls(format_string, default, fmt)
+    except Exception as exc:
+        import logging
+        logging.getLogger("formatter").error(
+            "Invalid format string '%s' (%s: %s)",
+            format_string, exc.__class__.__name__, exc)
+        raise
+
     return formatter
 
 
@@ -60,8 +67,8 @@ class StringFormatter():
     - "g": calls text.slugify()
     - "j": calls json.dumps
     - "t": calls str.strip
-    - "T": calls util.datetime_to_timestamp_string()
-    - "d": calls text.parse_timestamp
+    - "T": calls dt.to_ts_string()
+    - "d": calls dt.parse_ts()
     - "s": calls str()
     - "S": calls util.to_string()
     - "U": calls urllib.parse.unescape
@@ -463,9 +470,9 @@ def _parse_datetime(format_spec, default):
     dt_format = dt_format[1:]
     fmt = _build_format_func(format_spec, default)
 
-    def dt(obj):
-        return fmt(text.parse_datetime(obj, dt_format))
-    return dt
+    def dt_parse(obj):
+        return fmt(dt.parse(obj, dt_format))
+    return dt_parse
 
 
 def _parse_offset(format_spec, default):
@@ -474,15 +481,15 @@ def _parse_offset(format_spec, default):
     fmt = _build_format_func(format_spec, default)
 
     if not offset or offset == "local":
-        def off(dt):
-            local = time.localtime(util.datetime_to_timestamp(dt))
-            return fmt(dt + datetime.timedelta(0, local.tm_gmtoff))
+        def off(dt_utc):
+            local = time.localtime(dt.to_ts(dt_utc))
+            return fmt(dt_utc + dt.timedelta(0, local.tm_gmtoff))
     else:
         hours, _, minutes = offset.partition(":")
         offset = 3600 * int(hours)
         if minutes:
             offset += 60 * (int(minutes) if offset > 0 else -int(minutes))
-        offset = datetime.timedelta(0, offset)
+        offset = dt.timedelta(0, offset)
 
         def off(obj):
             return fmt(obj + offset)
@@ -549,7 +556,7 @@ _FORMATTERS = {
 _GLOBALS = {
     "_env": lambda: os.environ,
     "_lit": lambda: _literal,
-    "_now": datetime.datetime.now,
+    "_now": dt.datetime.now,
     "_nul": lambda: util.NONE,
 }
 _CONVERSIONS = {
@@ -561,9 +568,9 @@ _CONVERSIONS = {
     "t": str.strip,
     "n": len,
     "L": util.code_to_language,
-    "T": util.datetime_to_timestamp_string,
-    "d": text.parse_timestamp,
-    "D": util.to_datetime,
+    "T": dt.to_ts_string,
+    "d": dt.parse_ts,
+    "D": dt.convert,
     "U": text.unescape,
     "H": lambda s: text.unescape(text.remove_html(s)),
     "g": text.slugify,

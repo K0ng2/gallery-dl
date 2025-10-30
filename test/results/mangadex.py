@@ -6,7 +6,6 @@
 
 from gallery_dl.extractor import mangadex
 from gallery_dl import exception
-import datetime
 
 
 __tests__ = (
@@ -132,7 +131,7 @@ __tests__ = (
     "chapter"      : 0,
     "chapter_minor": "",
     "chapter_id"   : str,
-    "date"         : datetime.datetime,
+    "date"         : "type:datetime",
     "lang"         : "iso:lang",
     "artist"       : ["Arakawa Hiromu"],
     "author"       : ["Arakawa Hiromu"],
@@ -176,6 +175,15 @@ __tests__ = (
     "#url"     : "https://mangadex.org/title/584ef094-b2ab-40ce-962c-bce341fb9d10",
     "#class"   : mangadex.MangadexMangaExtractor,
     "#count"   : ">= 20",
+},
+
+{
+    "#url"     : "https://mangadex.org/title/2e73a1ac-bf26-4c04-84f6-d0a22fd37624/tomodachi-no-joshi-ni-josou-saserare-danshi",
+    "#comment" : "no 'description' (#8389)",
+    "#class"   : mangadex.MangadexMangaExtractor,
+    "#count"   : 47,
+
+    "description": "",
 },
 
 {

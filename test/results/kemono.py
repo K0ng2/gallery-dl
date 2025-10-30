@@ -5,7 +5,7 @@
 # published by the Free Software Foundation.
 
 from gallery_dl.extractor import kemono
-from gallery_dl import exception
+from gallery_dl import util, exception
 
 
 __tests__ = (
@@ -137,7 +137,7 @@ __tests__ = (
         "https://kemono.cr/data/b0/38/b03882c8b0ab3b1cf9fc658a2bb2f9ac6ad4f3449015311dcd2d7ee7f748db31.png",
     ),
 
-    "tags": r"re:\bpin-up\b",
+    "tags": list,
 },
 
 {
@@ -241,7 +241,7 @@ __tests__ = (
     "#class"   : kemono.KemonoPostExtractor,
     "#options" : {"dms": True, "comments": True},
 
-    "comments": (),
+    "comments": [],
     "dms": [
         {
             "added"    : "2021-07-31T02:47:51.327865",
@@ -378,6 +378,7 @@ __tests__ = (
     "revision_hash": {
         "9872bfb536a47cc69d95d2f195cd5c825808f089",
         "e0e93281495e151b11636c156e52bfe9234c2a40",
+        "eb2fa4385af730509a42f8f0424bd0b9a0e4bc21",
     },
 },
 
@@ -529,6 +530,23 @@ __tests__ = (
         "type": "archive",
         "url": "https://kemono.cr/data/46/cc/46cc99d4114906524fe52a6f772c51ab59ca1c3c0f6a8a0d3588a861b0d59ced.bin"
     }],
+},
+
+{
+    "#url"     : "https://kemono.cr/patreon/user/34792417/post/137409895",
+    "#comment" : "user profile data unavailable (#8382)",
+    "#category": ("", "kemono", "patreon"),
+    "#class"   : kemono.KemonoPostExtractor,
+    "#log"     : "patreon/34792417/137409895: 'Creator not found'",
+    "#results" : (
+        "https://kemono.cr/data/a9/87/a9874d7e1229396b0b2706fd7fa9949eac924e86256d84d077c10ecbace8bd17.bin",
+        "https://kemono.cr/data/a2/eb/a2eba02204086c789d59bc7112510aebf0428455ad1664153bfbb92eb8aa5643.jpg",
+    ),
+
+    "title"       : "Capella - Re:zero (20P)",
+    "user"        : "34792417",
+    "user_profile": util.NONE,
+    "username"    : util.NONE,
 },
 
 {

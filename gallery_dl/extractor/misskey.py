@@ -48,13 +48,11 @@ class MisskeyExtractor(BaseExtractor):
             note["instance"] = self.instance
             note["instance_remote"] = note["user"]["host"]
             note["count"] = len(files)
-            note["date"] = text.parse_datetime(
-                note["createdAt"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            note["date"] = self.parse_datetime_iso(note["createdAt"])
 
             yield Message.Directory, note
             for note["num"], file in enumerate(files, 1):
-                file["date"] = text.parse_datetime(
-                    file["createdAt"], "%Y-%m-%dT%H:%M:%S.%f%z")
+                file["date"] = self.parse_datetime_iso(file["createdAt"])
                 note["file"] = file
                 url = file["url"]
                 yield Message.Url, url, text.nameext_from_url(url, note)
@@ -108,7 +106,7 @@ BASE_PATTERN = MisskeyExtractor.update({
 class MisskeyUserExtractor(Dispatch, MisskeyExtractor):
     """Extractor for all images of a Misskey user"""
     subcategory = "user"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/?$"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/?$"
     example = "https://misskey.io/@USER"
 
     def items(self):
@@ -124,7 +122,7 @@ class MisskeyUserExtractor(Dispatch, MisskeyExtractor):
 class MisskeyNotesExtractor(MisskeyExtractor):
     """Extractor for a Misskey user's notes"""
     subcategory = "notes"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/notes"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/notes"
     example = "https://misskey.io/@USER/notes"
 
     def notes(self):
@@ -134,7 +132,7 @@ class MisskeyNotesExtractor(MisskeyExtractor):
 class MisskeyInfoExtractor(MisskeyExtractor):
     """Extractor for a Misskey user's profile data"""
     subcategory = "info"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/info"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/info"
     example = "https://misskey.io/@USER/info"
 
     def items(self):
@@ -145,7 +143,7 @@ class MisskeyInfoExtractor(MisskeyExtractor):
 class MisskeyAvatarExtractor(MisskeyExtractor):
     """Extractor for a Misskey user's avatar"""
     subcategory = "avatar"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/avatar"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/avatar"
     example = "https://misskey.io/@USER/avatar"
 
     def notes(self):
@@ -157,7 +155,7 @@ class MisskeyAvatarExtractor(MisskeyExtractor):
 class MisskeyBackgroundExtractor(MisskeyExtractor):
     """Extractor for a Misskey user's banner image"""
     subcategory = "background"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/ba(?:nner|ckground)"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/ba(?:nner|ckground)"
     example = "https://misskey.io/@USER/banner"
 
     def notes(self):
@@ -169,7 +167,7 @@ class MisskeyBackgroundExtractor(MisskeyExtractor):
 class MisskeyFollowingExtractor(MisskeyExtractor):
     """Extractor for followed Misskey users"""
     subcategory = "following"
-    pattern = BASE_PATTERN + r"/@([^/?#]+)/following"
+    pattern = rf"{BASE_PATTERN}/@([^/?#]+)/following"
     example = "https://misskey.io/@USER/following"
 
     def items(self):
@@ -186,7 +184,7 @@ class MisskeyFollowingExtractor(MisskeyExtractor):
 class MisskeyNoteExtractor(MisskeyExtractor):
     """Extractor for images from a Note"""
     subcategory = "note"
-    pattern = BASE_PATTERN + r"/notes/(\w+)"
+    pattern = rf"{BASE_PATTERN}/notes/(\w+)"
     example = "https://misskey.io/notes/98765"
 
     def notes(self):
@@ -196,7 +194,7 @@ class MisskeyNoteExtractor(MisskeyExtractor):
 class MisskeyFavoriteExtractor(MisskeyExtractor):
     """Extractor for favorited notes"""
     subcategory = "favorite"
-    pattern = BASE_PATTERN + r"/(?:my|api/i)/favorites"
+    pattern = rf"{BASE_PATTERN}/(?:my|api/i)/favorites"
     example = "https://misskey.io/my/favorites"
 
     def notes(self):

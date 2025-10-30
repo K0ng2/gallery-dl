@@ -15,6 +15,7 @@ from .. import text, exception
 class PahealExtractor(Extractor):
     """Base class for paheal extractors"""
     basecategory = "shimmie2"
+    basesubcategory = ""
     category = "paheal"
     filename_fmt = "{category}_{id}_{md5}.{extension}"
     archive_fmt = "{id}"
@@ -53,8 +54,7 @@ class PahealExtractor(Extractor):
                          extr("<source src='", "'")),
             "uploader": text.unquote(extr(
                 "class='username' href='/user/", "'")),
-            "date"    : text.parse_datetime(
-                extr("datetime='", "'"), "%Y-%m-%dT%H:%M:%S%z"),
+            "date"    : self.parse_datetime_iso(extr("datetime='", "'")),
             "source"  : text.unescape(text.extr(
                 extr(">Source Link<", "</td>"), "href='", "'")),
         }
@@ -133,7 +133,7 @@ class PahealTagExtractor(PahealExtractor):
             "duration" : text.parse_float(duration[:-1]),
             "tags"     : text.unescape(tags),
             "size"     : text.parse_bytes(size[:-1]),
-            "date"     : text.parse_datetime(date, "%B %d, %Y; %H:%M"),
+            "date"     : self.parse_datetime(date, "%B %d, %Y; %H:%M"),
             "filename" : f"{pid} - {tags}",
             "extension": ext,
         }

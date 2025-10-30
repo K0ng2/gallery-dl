@@ -220,7 +220,13 @@ Consider all listed sites to potentially be NSFW.
 <tr id="cyberfile" title="cyberfile">
     <td>CyberFile</td>
     <td>https://cyberfile.me/</td>
-    <td>Files, Folders</td>
+    <td>Files, Folders, Shares</td>
+    <td></td>
+</tr>
+<tr id="dandadan" title="dandadan">
+    <td>Dandadan</td>
+    <td>https://dandadan.net/</td>
+    <td>Chapters, Manga</td>
     <td></td>
 </tr>
 <tr id="dankefuerslesen" title="dankefuerslesen">
@@ -929,7 +935,7 @@ Consider all listed sites to potentially be NSFW.
     <td>SimpCity Forums</td>
     <td>https://simpcity.cr/</td>
     <td>Forums, Posts, Threads</td>
-    <td></td>
+    <td>Supported</td>
 </tr>
 <tr id="simplyhentai" title="simplyhentai">
     <td>Simply Hentai</td>
@@ -1292,19 +1298,19 @@ Consider all listed sites to potentially be NSFW.
 <tr id="e621" title="e621">
     <td>e621</td>
     <td>https://e621.net/</td>
-    <td>Favorites, Pools, Popular Images, Posts, Tag Searches, Frontends</td>
+    <td>Artists, Artist Searches, Favorites, Pools, Popular Images, Posts, Tag Searches, Frontends</td>
     <td>Supported</td>
 </tr>
 <tr id="e926" title="e926">
     <td>e926</td>
     <td>https://e926.net/</td>
-    <td>Favorites, Pools, Popular Images, Posts, Tag Searches</td>
+    <td>Artists, Artist Searches, Favorites, Pools, Popular Images, Posts, Tag Searches</td>
     <td>Supported</td>
 </tr>
 <tr id="e6ai" title="e6ai">
     <td>e6AI</td>
     <td>https://e6ai.net/</td>
-    <td>Favorites, Pools, Popular Images, Posts, Tag Searches</td>
+    <td>Artists, Artist Searches, Favorites, Pools, Popular Images, Posts, Tag Searches</td>
     <td>Supported</td>
 </tr>
 
@@ -1648,6 +1654,12 @@ Consider all listed sites to potentially be NSFW.
 <tr id="thecollectionS" title="thecollectionS">
     <td>The /co/llection</td>
     <td>https://co.llection.pics/</td>
+    <td>Posts, Tag Searches</td>
+    <td></td>
+</tr>
+<tr id="soybooru" title="soybooru">
+    <td>Soybooru</td>
+    <td>https://soybooru.com/</td>
     <td>Posts, Tag Searches</td>
     <td></td>
 </tr>

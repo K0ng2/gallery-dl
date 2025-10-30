@@ -27,7 +27,7 @@ class BellazonExtractor(Extractor):
         native = (f"{self.root}/", f"{self.root[6:]}/")
         extract_urls = text.re(
             r'(?s)<('
-            r'(?:video .*?<source src|a [^>]*?href)="([^"]+).*?</a>'
+            r'(?:video .*?<source [^>]*?src|a [^>]*?href)="([^"]+).*?</a>'
             r'|img [^>]*?src="([^"]+)"[^>]*>'
             r')'
         ).findall
@@ -47,14 +47,19 @@ class BellazonExtractor(Extractor):
             post["count"] = data["count"] = len(urls)
 
             yield Message.Directory, data
-            data["num"] = 0
+            data["num"] = data["num_internal"] = data["num_external"] = 0
             for info, url, url_img in urls:
                 url = text.unescape(url or url_img)
 
                 if url.startswith(native):
-                    if "/uploads/emoticons/" in url or "/profile/" in url:
+                    if (
+                        "/uploads/emoticons/" in url or
+                        "/profile/" in url or
+                        "/topic/" in url
+                    ):
                         continue
                     data["num"] += 1
+                    data["num_internal"] += 1
                     if not (alt := text.extr(info, ' alt="', '"')) or (
                             alt.startswith("post-") and "_thumb." in alt):
                         name = url
@@ -76,6 +81,8 @@ class BellazonExtractor(Extractor):
                     yield Message.Url, url, dc
 
                 else:
+                    data["num"] += 1
+                    data["num_external"] += 1
                     yield Message.Queue, url, data
 
     def _pagination(self, base, pnum=None):
@@ -126,7 +133,7 @@ class BellazonExtractor(Extractor):
         author = schema["author"]
         stats = schema["interactionStatistic"]
         url_t = schema["url"]
-        url_a = author["url"]
+        url_a = author.get("url") or ""
 
         path = text.split_html(text.extr(
             page, '<nav class="ipsBreadcrumb', "</nav>"))[2:-1]
@@ -137,8 +144,8 @@ class BellazonExtractor(Extractor):
             "title": schema["headline"],
             "views": stats[0]["userInteractionCount"],
             "posts": stats[1]["userInteractionCount"],
-            "date" : text.parse_datetime(schema["datePublished"]),
-            "date_updated": text.parse_datetime(schema["dateModified"]),
+            "date" : self.parse_datetime_iso(schema["datePublished"]),
+            "date_updated": self.parse_datetime_iso(schema["dateModified"]),
             "description" : text.unescape(schema["text"]).strip(),
             "section"     : path[-2],
             "author"      : author["name"],
@@ -147,8 +154,12 @@ class BellazonExtractor(Extractor):
 
         thread["id"], _, thread["slug"] = \
             url_t.rsplit("/", 2)[1].partition("-")
-        thread["author_id"], _, thread["author_slug"] = \
-            url_a.rsplit("/", 2)[1].partition("-")
+
+        if url_a:
+            thread["author_id"], _, thread["author_slug"] = \
+                url_a.rsplit("/", 2)[1].partition("-")
+        else:
+            thread["author_id"] = thread["author_slug"] = ""
 
         return thread
 
@@ -158,15 +169,18 @@ class BellazonExtractor(Extractor):
         post = {
             "id": extr('id="elComment_', '"'),
             "author_url": extr(" href='", "'"),
-            "date": text.parse_datetime(extr("datetime='", "'")),
+            "date": self.parse_datetime_iso(extr("datetime='", "'")),
             "content": extr("<!-- Post content -->", "\n\t\t</div>"),
         }
 
         if (pos := post["content"].find(">")) >= 0:
             post["content"] = post["content"][pos+1:].strip()
 
-        post["author_id"], _, post["author_slug"] = \
-            post["author_url"].rsplit("/", 2)[1].partition("-")
+        if url_a := post["author_url"]:
+            post["author_id"], _, post["author_slug"] = \
+                url_a.rsplit("/", 2)[1].partition("-")
+        else:
+            post["author_id"] = post["author_slug"] = ""
 
         return post
 

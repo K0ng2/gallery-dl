@@ -27,7 +27,10 @@ class ImagehostImageExtractor(Extractor):
 
     def __init__(self, match):
         Extractor.__init__(self, match)
-        self.page_url = f"http{'s' if self._https else ''}://{match[1]}"
+        if self.root:
+            self.page_url = f"{self.root}{match[1]}"
+        else:
+            self.page_url = f"http{'s' if self._https else ''}://{match[1]}"
         self.token = match[2]
 
         if self._params == "simple":
@@ -53,6 +56,8 @@ class ImagehostImageExtractor(Extractor):
         ).text
 
         url, filename = self.get_info(page)
+        if not url:
+            return
         data = text.nameext_from_url(filename, {"token": self.token})
         data.update(self.metadata(page))
         if self._https and url.startswith("http:"):
@@ -199,6 +204,8 @@ class ImagetwistImageExtractor(ImagehostImageExtractor):
 
     def get_info(self, page):
         url     , pos = text.extract(page, '<img src="', '"')
+        if url and url.startswith("/imgs/"):
+            return None, None
         filename, pos = text.extract(page, ' alt="', '"', pos)
         return url, filename
 
@@ -258,8 +265,9 @@ class ImgspiceImageExtractor(ImagehostImageExtractor):
 class PixhostImageExtractor(ImagehostImageExtractor):
     """Extractor for single images from pixhost.to"""
     category = "pixhost"
-    pattern = (r"(?:https?://)?((?:www\.)?pixhost\.(?:to|org)"
-               r"/show/\d+/(\d+)_[^/?#]+)")
+    root = "https://pixhost.to"
+    pattern = (r"(?:https?://)?(?:www\.)?pixhost\.(?:to|org)"
+               r"(/show/\d+/(\d+)_[^/?#]+)")
     example = "https://pixhost.to/show/123/12345_NAME.EXT"
     _cookies = {"pixhostads": "1", "pixhosttest": "1"}
 
@@ -273,8 +281,9 @@ class PixhostGalleryExtractor(ImagehostImageExtractor):
     """Extractor for image galleries from pixhost.to"""
     category = "pixhost"
     subcategory = "gallery"
-    pattern = (r"(?:https?://)?((?:www\.)?pixhost\.(?:to|org)"
-               r"/gallery/([^/?#]+))")
+    root = "https://pixhost.to"
+    pattern = (r"(?:https?://)?(?:www\.)?pixhost\.(?:to|org)"
+               r"(/gallery/([^/?#]+))")
     example = "https://pixhost.to/gallery/ID"
 
     def items(self):

@@ -587,6 +587,7 @@ Description
     * ``sankaku``
     * ``scrolller``
     * ``seiga``
+    * ``simpcity``
     * ``subscribestar``
     * ``tapas``
     * ``tsumino``
@@ -1134,15 +1135,16 @@ Type
 Default
     ``"file"``
 Example
-    * ``"file,skip"``
-    * ``["file", "skip"]``
+    * ``"after,skip"``
+    * ``["after", "skip"]``
 Description
     `Event(s) <metadata.event_>`__
     for which IDs get written to an
     `archive <extractor.*.archive_>`__.
-
-    Available events are:
-    ``file``, ``skip``
+Available Events
+    * ``file``
+    * ``after``
+    * ``skip``
 
 
 extractor.*.archive-format
@@ -2096,6 +2098,45 @@ Description
       ``None`` and ``Soft`` rated images,
 
 
+extractor.civitai.period
+------------------------
+Type
+    ``string``
+Default
+    ``"AllTime"``
+Description
+    Sets the ``period`` parameter
+    when paginating over results.
+Supported Values
+    * ``"AllTime"``
+    * ``"Year"``
+    * ``"Month"``
+    * ``"Week"``
+    * ``"Day"``
+
+
+extractor.civitai.sort
+----------------------
+Type
+    ``string``
+Default
+    ``"Newest"``
+Description
+    Sets the ``sort`` parameter
+    when paginating over results.
+Supported Values
+    * ``"Newest"``
+    * ``"Oldest"``
+    * ``"Most Reactions"``
+    * ``"Most Comments"``
+    * ``"Most Collected"``
+Special Values
+    ``"asc"``
+        Ascending order (``"Oldest"``)
+    ``"desc"`` | ``"reverse"``
+        Descending order (``"Newest"``)
+
+
 extractor.civitai.quality
 -------------------------
 Type
@@ -2188,6 +2229,16 @@ Description
     Leave this value empty or undefined
     to be interactively prompted for a password when needed
     (see `getpass() <https://docs.python.org/3/library/getpass.html#getpass.getpass>`__).
+
+
+extractor.cyberfile.recursive
+-----------------------------
+Type
+    ``bool``
+Default
+    ``true``
+Description
+    Recursively download files from subfolders.
 
 
 extractor.[Danbooru].external
@@ -2970,6 +3021,16 @@ Note
     `fanbox.comments <extractor.fanbox.comments_>`__
 
 
+extractor.fanbox.creator.offset
+-------------------------------
+Type
+    ``integer``
+Default
+    ``0``
+Description
+    Custom ``offset`` starting value when paginating over posts.
+
+
 extractor.fansly.formats
 ------------------------
 Type
@@ -3243,6 +3304,19 @@ Description
     Recursively download files from subfolders.
 
 
+extractor.hdoujin.cbz
+---------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Download each gallery as a single ``.cbz`` file.
+Note
+    Requires a
+    `token <extractor.hdoujin.token_>`__
+
+
 extractor.hdoujin.crt
 ---------------------
 Type
@@ -3304,7 +3378,10 @@ Example
 Description
     ``Authorization`` header value
     used for requests to ``https://api.hdoujin.org``
-    to access ``favorite`` galleries.
+    to access ``favorite`` galleries
+    or download
+    `.cbz <extractor.hdoujin.cbz_>`__
+    archives.
 
 
 extractor.hentaifoundry.descriptions
@@ -5122,6 +5199,19 @@ Description
     Download videos.
 
 
+extractor.schalenetwork.cbz
+---------------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Download each gallery as a single ``.cbz`` file.
+Note
+    Requires a
+    `token <extractor.schalenetwork.token_>`__
+
+
 extractor.schalenetwork.crt
 ---------------------------
 Type
@@ -5186,7 +5276,10 @@ Example
 Description
     ``Authorization`` header value
     used for requests to ``https://api.schale.network``
-    to access ``favorite`` galleries.
+    to access ``favorite`` galleries
+    or download
+    `.cbz <extractor.schalenetwork.cbz_>`__
+    archives.
 
 
 extractor.sexcom.gifs
@@ -6553,6 +6646,17 @@ Description
     will be taken from the original posts, not the retweeted posts.
 
 
+extractor.weibo.text
+--------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Extract full ``text`` & ``text_raw`` metadata
+    for statuses with truncated ``text``.
+
+
 extractor.weibo.videos
 ----------------------
 Type
@@ -6561,6 +6665,20 @@ Default
     ``true``
 Description
     Download video files.
+
+
+extractor.wikimedia.format
+--------------------------
+Type
+    ``string``
+Default
+    ``fandom`` | ``wikigg``
+        ``"original"``
+    otherwise
+        ``""``
+Description
+    Sets the `format` query parameter value
+    added to all download URLs.
 
 
 extractor.wikimedia.image-revisions
@@ -7720,8 +7838,8 @@ Description
       name and any further elements its arguments.
 
       Each element of this list is evaluated as a `Format String`_ using
-      the files' metadata as well as ``{_path}``, ``{_directory}``,
-      and ``{_filename}``.
+      the files' metadata as well as
+      ``{_path}``, ``{_temppath}``, ``{_directory}``, and ``{_filename}``.
 
 
 exec.commands
@@ -8141,7 +8259,7 @@ metadata.open
 -------------
 Type
     ``string``
-Defsult
+Default
     ``"w"``
 Description
     The ``mode`` in which metadata files get opened.
@@ -8157,12 +8275,35 @@ metadata.encoding
 -----------------
 Type
     ``string``
-Defsult
+Default
     ``"utf-8"``
 Description
     Name of the encoding used to encode a file's content.
 
     See the ``encoding`` argument of |open()|_ for further details.
+
+
+metadata.newline
+-----------------
+Type
+    ``string``
+Default
+    ``null``
+Description
+    The newline sequence used in metadata files.
+
+    If ``null``, any ``\n`` characters
+    written are translated to the system default line separator.
+
+    See the ``newline`` argument of |open()|_ for further details.
+Supported Values
+    ``null``
+        Any ``\n`` characters
+        written are translated to the system default line separator.
+    ``""`` | ``"\n"``
+        Don't replace newline characters.
+    ``"\r"`` | ``"\r\n"``
+        Replace newline characters with the given sequence.
 
 
 metadata.private
