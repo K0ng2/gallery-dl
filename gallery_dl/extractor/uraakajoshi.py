@@ -9,7 +9,7 @@
 """Extractors for https://www.uraaka-joshi.com/"""
 
 from .common import Extractor, Message, Dispatch
-from .. import text, util
+from .. import text, util, dt
 import datetime
 
 
@@ -165,7 +165,7 @@ class UraakajoshiExtractor(Extractor):
 			"tweet_id": tweet_id,
 			"id": tweet_id,
 			"content": text.unescape(tweet_data["text"]),
-			"date": self.parse_timestamp(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
+			"date": dt.parse(tweet_data["created"], "%Y-%m-%d %H:%M:%S"),
 			"created": tweet_data["created"],
 			"type": tweet_data.get("type", ""),
 			"access_ranking": tweet_data.get("access_ranking", ""),
