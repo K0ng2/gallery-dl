@@ -45,7 +45,7 @@ class UraakajoshiExtractor(Extractor):
 			if not media_files:
 				continue
 
-			yield Message.Directory, transformed_tweet
+			yield Message.Directory, "", transformed_tweet
 
 			for file_number, file_metadata in enumerate(media_files, 1):
 				url = file_metadata.pop("_url")
@@ -307,7 +307,7 @@ class UraakajoshiInfoExtractor(UraakajoshiExtractor):
 	def items(self):
 		user_data = self._get_user_data_from_timeline()
 		if user_data:
-			yield Message.Directory, {"user": user_data}
+			yield Message.Directory, "", {"user": user_data}
 
 	def metadata(self):
 		"""Return user metadata"""
@@ -404,7 +404,7 @@ class UraakajoshiAvatarExtractor(UraakajoshiExtractor):
 		if not user_data or not tweet_data:
 			return
 
-		yield Message.Directory, {"user": user_data}
+		yield Message.Directory, "", {"user": user_data}
 
 		screen_names = tweet_data.get("screen_name", [])
 		if not screen_names:
@@ -452,7 +452,7 @@ class UraakajoshiBackgroundExtractor(UraakajoshiExtractor):
 		if not user_data or not tweet_data:
 			return
 
-		yield Message.Directory, {"user": user_data}
+		yield Message.Directory, "", {"user": user_data}
 
 		screen_names = tweet_data.get("screen_name", [])
 		if not screen_names:
